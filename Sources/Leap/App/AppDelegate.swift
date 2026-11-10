@@ -11,9 +11,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var scrollMenuItem: NSMenuItem?
     private var autoActivateMenuItem: NSMenuItem?
     private var hotKeyObserver: AnyObject?
+    private var terminationSignal: DispatchSourceSignal?
 
     func applicationDidFinishLaunching(_: Notification) {
         Settings.registerDefaults()
+        quitOnTerminationSignal()
         setUpMainMenu()
         setUpStatusItem()
         registerHotKeys()
@@ -180,7 +182,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Quitting from Settings would leave macOS to pick some background process as the
     /// active app; hiding first hands the keyboard back to the app that was in front.
     func applicationWillTerminate(_: Notification) {
+        stopColorSampler()
         if NSApp.isActive { NSApp.hide(nil) }
+    }
+
+    /// The color panel's eyedropper runs in a system process, ColorSampler, that covers
+    /// every screen and takes every click until a color is picked. It outlives a client that
+    /// quits while it samples and ignores SIGTERM, which would leave the mouse dead, so Leap
+    /// ends it when it quits. Only when Leap has opened the color panel: otherwise any
+    /// sampler running belongs to another app.
+    private func stopColorSampler() {
+        guard NSColorPanel.sharedColorPanelExists else { return }
+        for sampler in NSRunningApplication.runningApplications(
+            withBundleIdentifier: "com.apple.appkit.xpc.ColorSampler")
+        {
+            // `forceTerminate` returns without effect on this system process; SIGKILL works.
+            let pid = sampler.processIdentifier
+            let ended = kill(pid, SIGKILL) == 0
+            Log.app.notice(
+                "ending the color sampler, pid \(pid): \(ended ? "done" : "failed", privacy: .public)"
+            )
+        }
+    }
+
+    /// `kill`, `pkill` and the install script quit Leap through the same path as the menu,
+    /// so `applicationWillTerminate` cleans up.
+    private func quitOnTerminationSignal() {
+        signal(SIGTERM, SIG_IGN)
+        let source = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
+        source.setEventHandler {
+            MainActor.assumeIsolated { NSApp.terminate(nil) }
+        }
+        source.resume()
+        terminationSignal = source
     }
 
     func applicationShouldHandleReopen(_: NSApplication, hasVisibleWindows _: Bool) -> Bool {

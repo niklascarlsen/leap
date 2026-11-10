@@ -32,8 +32,9 @@ scripts/build-app.sh --install               # build, sign, install, relaunch
 - Keep the build at zero warnings (Swift 6 strict concurrency is on) and the lint clean.
 - Prefer Swift concurrency (`Task`, `Task.sleep(for:)`) over GCD; `concurrentPerform` stays
   for batches of synchronous accessibility requests (`ElementFinder.concurrentMap`).
-- Sign with an Apple Development identity (the script does). Ad hoc signing makes macOS
-  forget the Accessibility grant on every rebuild.
+- Sign with the Developer ID identity (the script does, else Apple Development). The
+  Accessibility grant is tied to the signature: local builds then share the releases'
+  grant, and ad hoc signing makes macOS forget it on every rebuild.
 - In zsh `log` is a builtin; always call `/usr/bin/log`.
 
 ## Known gaps, roughly by value

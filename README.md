@@ -8,7 +8,7 @@ I built Leap for myself, mostly for everything outside the browser; in the brows
 mostly use Vimium. It does what I have needed so far, so it may be missing something you
 need. Bugs and ideas are welcome as [issues](https://github.com/niklascarlsen/leap/issues).
 
-Needs macOS 27 or later. Free and open source.
+Needs macOS 27 or later.
 
 ## Install
 
@@ -74,8 +74,11 @@ swift test
 scripts/build-app.sh --install
 ```
 
-This builds Leap and installs it to `~/Applications`. [AGENTS.md](AGENTS.md) explains
-how the code works.
+This builds Leap and installs it to `~/Applications`. It stops if Leap is also
+installed in `/Applications`, since two copies would compete for the shortcuts; remove
+that one first (`brew uninstall --cask leap` keeps your settings). The script signs
+Leap with a Developer ID or Apple Development identity from your keychain. Without one
+it signs ad hoc, and macOS asks for Accessibility access again after every build.
 
 ## License
 

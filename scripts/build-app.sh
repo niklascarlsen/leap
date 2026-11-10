@@ -1,7 +1,8 @@
 #!/bin/sh
-# Builds Leap.app, signs it with the first "Apple Development" identity in the
-# keychain (a stable identity keeps the Accessibility permission across rebuilds), and
-# optionally installs it to ~/Applications.
+# Builds Leap.app, signs it with the keychain's "Developer ID Application" identity, or
+# else an "Apple Development" one, and optionally installs it to ~/Applications.
+# Developer ID is preferred because the Accessibility grant is tied to the signature:
+# local builds then share one grant with releases and keep it across rebuilds.
 #
 # Usage: scripts/build-app.sh [--install]
 # LEAP_VERSION sets the version (default 0.0.0), LEAP_IDENTITY the signing identity
@@ -46,16 +47,19 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
-IDENTITY="${LEAP_IDENTITY:-$(security find-identity -v -p codesigning | awk -F'"' '/Apple Development/ { print $2; exit }')}"
+# By certificate hash: `security` escapes non-ASCII characters in the names.
+find_identity() {
+    security find-identity -v -p codesigning | awk -v kind="$1" '$0 ~ kind { print $2; exit }'
+}
+IDENTITY="${LEAP_IDENTITY:-$(find_identity "Developer ID Application")}"
+IDENTITY="${IDENTITY:-$(find_identity "Apple Development")}"
 if [ -z "$IDENTITY" ]; then
-    echo "No Apple Development identity found; signing ad hoc (Accessibility must be re-granted after each build)" >&2
+    echo "No signing identity found; signing ad hoc (Accessibility must be re-granted after each build)" >&2
     IDENTITY="-"
 fi
-# Notarization needs a secure timestamp; local builds skip it to stay offline and fast.
-# LEAP_IDENTITY may be a name or a certificate hash, so look it up; "-" is ad hoc and
-# could otherwise match any identity line with a dash in it.
-if [ "$IDENTITY" != "-" ] \
-    && security find-identity -v -p codesigning | grep -F -- "$IDENTITY" | grep -q "Developer ID"; then
+# Notarization (releases, which pass LEAP_IDENTITY) needs a secure timestamp; local
+# builds skip it to stay offline and fast.
+if [ -n "${LEAP_IDENTITY:-}" ]; then
     TIMESTAMP="--timestamp"
 else
     TIMESTAMP="--timestamp=none"
@@ -65,8 +69,15 @@ codesign --verify --strict "$APP"
 echo "Built $APP (signed by: $IDENTITY)"
 
 if [ "${1:-}" = "--install" ]; then
+    # Two copies would fight over the shortcuts and the Accessibility grant.
+    if [ -d /Applications/Leap.app ]; then
+        echo "Another Leap is installed in /Applications; remove it first (brew uninstall --cask leap)" >&2
+        exit 1
+    fi
     mkdir -p "$HOME/Applications"
+    # Leap quits on SIGTERM as from its menu; wait so that open launches the new build.
     pkill -x Leap 2>/dev/null || true
+    while pgrep -x Leap >/dev/null; do sleep 0.1; done
     rm -rf "$HOME/Applications/Leap.app"
     cp -R "$APP" "$HOME/Applications/Leap.app"
     open "$HOME/Applications/Leap.app"
