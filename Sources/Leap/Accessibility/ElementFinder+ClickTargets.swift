@@ -137,7 +137,10 @@ extension ElementFinder {
                 if let labelledAncestor { owner[ElementKey(node.element)] = labelledAncestor }
                 return labelledAncestor
             }
-            guard node.enabled != false, let frame = node.frame, isUsable(frame, clip: clip) else {
+            // PDFKit (Preview) answers `AXEnabled` false for every link in a PDF, an attribute
+            // its links do not even list. Links have no disabled state, so it is ignored there.
+            let enabled = node.enabled != false || role == "AXLink"
+            guard enabled, let frame = node.frame, isUsable(frame, clip: clip) else {
                 return belongsToAncestor()
             }
             let clickable =

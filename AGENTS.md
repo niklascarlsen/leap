@@ -46,6 +46,8 @@ scripts/build-app.sh --install               # build, sign, install, relaunch
 - In iOS apps, timestamps and date headers get labels too (pressable text like the cells).
 - Scroll mode in Safari finds only the page: WebKit leaves scrolling `div`s out of the
   tree and reports their rows at unclipped positions.
+- Links inside headings of tagged PDFs (Chrome's print to PDF) get no label: Preview
+  flattens a heading into one `AXHeading` without its `AXLink`.
 - With the menu bar shown, leap mode asks every running app for status items each time
   (~170 ms); remembering which apps own some would make it faster.
 - A changed Mission Control shortcut needs a Leap restart.
