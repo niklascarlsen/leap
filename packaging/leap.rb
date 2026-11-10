@@ -9,7 +9,7 @@ cask "leap" do
   desc "Keyboard-driven clicking and scrolling"
   homepage "https://github.com/niklascarlsen/leap"
 
-  depends_on macos: ">= :golden_gate"
+  depends_on macos: :golden_gate
 
   app "Leap.app"
 
