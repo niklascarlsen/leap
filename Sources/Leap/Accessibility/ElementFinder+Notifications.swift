@@ -1,13 +1,15 @@
 import AppKit
 import ApplicationServices
+import LeapCore
 
 @MainActor
 extension ElementFinder {
     // MARK: Notifications
 
-    /// Notification banners and alerts on screen. Notification Center draws them all in one
-    /// window over the whole screen; each is an `AXGroup` whose `AXPress` opens it and whose
-    /// custom "Close" action, with Shift, closes it.
+    /// Notification banners and alerts on screen, and the buttons on them (answering or
+    /// declining a call). Notification Center draws them all in one window over the whole
+    /// screen; each is an `AXGroup` whose `AXPress` opens it and whose custom "Close" action,
+    /// with Shift, closes it. A banner shows its buttons only while the pointer is over it.
     static func notifications() -> [Target] {
         guard let app = NSRunningApplication.running(notificationCenter) else { return [] }
         let appElement = AXUIElementCreateApplication(app.processIdentifier)
@@ -15,16 +17,23 @@ extension ElementFinder {
         let windows = AX.attribute(appElement, kAXWindowsAttribute, as: [AXUIElement].self) ?? []
         var found: [Target] = []
         for window in windows {
-            walk(window) { node, clip in
+            // The context tells whether the node is inside a notification.
+            walk(window, context: false) { node, clip, inNotification -> Bool? in
                 // Subroles AXNotificationCenterBanner and AXNotificationCenterAlert.
-                guard node.subrole?.hasPrefix("AXNotificationCenter") == true else { return true }
-                if let frame = node.frame, isUsable(frame, clip: clip) {
+                let isNotification = node.subrole?.hasPrefix("AXNotificationCenter") == true
+                guard isNotification || inNotification else { return false }
+                guard node.enabled != false, let frame = node.frame, isUsable(frame, clip: clip)
+                else { return nil }
+                if isNotification {
                     found.append(
                         Target(
                             element: node.element, frame: frame, activation: .pressOnly,
                             shiftAction: closeAction(of: node.element)))
+                } else if Roles.nestedControls.contains(node.role ?? "") {
+                    found.append(
+                        Target(element: node.element, frame: frame, activation: .pressOnly))
                 }
-                return false
+                return true
             }
         }
         return found
